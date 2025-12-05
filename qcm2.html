@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Who Wants to Be a Millionaire?</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: Arial, sans-serif;
+            background: #000;
+            color: #fff;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Studio background image */
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image: url("studio.jpg");
+            background-size: cover;
+            background-position: center;
+            filter: blur(2px) brightness(0.4);
+            z-index: -2;
+        }
+
+        /* Dark overlay (base state) */
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at center, rgba(0,0,0,0.1), rgba(0,0,0,0.85));
+            z-index: -1;
+        }
+
+        .game-container {
+            width: 900px;
+            max-width: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            border: 2px solid #555;
+            border-radius: 10px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        .left-panel, .right-panel {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo-wrap {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+
+        .logo-wrap img {
+            width: 140px;
+            max-width: 45%;
+            filter: drop-shadow(0 0 10px rgba(0,0,0,0.8));
+            animation: logoFloat 4s ease-in-out infinite;
+        }
+
+        @keyframes logoFloat {
+            0%   { transform: translateY(0); }
+            50%  { transform: translateY(-4px); }
+            100% { transform: translateY(0); }
+        }
+
+        .title {
+            text-align: center;
+            font-size: 26px;
+            margin-bottom: 10px;
+        }
+
+        .question-box {
+            background: #111;
+            border-radius: 8px;
+            padding: 15px;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 18px;
+        }
+
+        .timer {
+            margin-top: 10px;
+            font-size: 18px;
+            text-align: center;
+            color: #ffc107;
+        }
+
+        .timer.low {
+            color: #ff4d4d;
+            font-weight: bold;
+        }
+
+        .answers {
+            margin-top: 15px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .answer-btn {
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background: #222;
+            color: #fff;
+            cursor: pointer;
+            font-size: 15px;
+            text-align: left;
+            transition: transform 0.1s, background 0.1s, border-color 0.1s;
+        }
+
+        .answer-btn:hover {
+            transform: scale(1.02);
+            border-color: #888;
+        }
+
+        @keyframes correctGlow {
+            0%   { box-shadow: 0 0 0 rgba(0,255,0,0); transform: scale(1); }
+            50%  { box-shadow: 0 0 20px rgba(0,255,0,0.9); transform: scale(1.03); }
+            100% { box-shadow: 0 0 0 rgba(0,255,0,0); transform: scale(1); }
+        }
+
+        .answer-btn.correct {
+            background: #155724;
+            border-color: #28a745;
+            animation: correctGlow 0.6s ease-in-out 0s 2;
+        }
+
+        @keyframes wrongShake {
+            0%   { transform: translateX(0); }
+            25%  { transform: translateX(-4px); }
+            50%  { transform: translateX(4px); }
+            75%  { transform: translateX(-4px); }
+            100% { transform: translateX(0); }
+        }
+
+        .answer-btn.wrong {
+            background: #721c24;
+            border-color: #dc3545;
+            animation: wrongShake 0.4s linear 0s 2;
+        }
+
+        .disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .lifelines {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            gap: 5px;
+        }
+
+        .lifeline-btn {
+            flex: 1;
+            padding: 8px;
+            border-radius: 20px;
+            border: 1px solid #555;
+            background: #333;
+            color: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.1s, transform 0.1s, opacity 0.1s;
+        }
+
+        .lifeline-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .lifeline-btn.used {
+            opacity: 0.3;
+            cursor: default;
+        }
+
+        .status {
+            margin-top: 10px;
+            min-height: 40px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .money-ladder {
+            background: #111;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .ladder-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 6px;
+            border-radius: 4px;
+            margin-bottom: 2px;
+        }
+
+        @keyframes ladderPulse {
+            0%   { box-shadow: 0 0 0 rgba(255, 193, 7, 0); }
+            50%  { box-shadow: 0 0 12px rgba(255, 193, 7, 0.9); }
+            100% { box-shadow: 0 0 0 rgba(255, 193, 7, 0); }
+        }
+
+        .ladder-item.current {
+            background: #004085;
+            color: #fff;
+            font-weight: bold;
+            animation: ladderPulse 1s ease-in-out 0s 1;
+        }
+
+        .ladder-item.passed {
+            color: #28a745;
+        }
+
+        .ladder-item.safe {
+            font-style: italic;
+        }
+
+        .controls {
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .restart-btn {
+            padding: 6px 14px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: #222;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .restart-btn:hover {
+            background: #333;
+        }
+
+        .highlight {
+            color: #ffc107;
+        }
+
+        /* Flash effect when player wins */
+        @keyframes winFlash {
+            0%   { background-color: rgba(255,215,0,0); }
+            50%  { background-color: rgba(255,215,0,0.35); }
+            100% { background-color: rgba(255,215,0,0); }
+        }
+
+        body.win::after {
+            animation: winFlash 0.7s ease-in-out 0s 6;
+        }
+
+        /* Light transition when a new question appears */
+        @keyframes questionFlash {
+            0% {
+                background: radial-gradient(circle at center, rgba(255,255,255,0.35), rgba(0,0,0,0.85));
+            }
+            100% {
+                background: radial-gradient(circle at center, rgba(0,0,0,0.1), rgba(0,0,0,0.85));
+            }
+        }
+
+        body.question-flash::after {
+            animation: questionFlash 0.7s ease-out;
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <div class="left-panel">
+
+        <div class="logo-wrap">
+            <img src="logo.png" alt="Millionaire logo">
+        </div>
+
+        <div class="title">Who Wants to Be a Millionaire?</div>
+
+        <div class="lifelines">
+            <button id="fiftyBtn" class="lifeline-btn">50 : 50</button>
+            <button id="phoneBtn" class="lifeline-btn">📞 Phone a Friend</button>
+            <button id="audienceBtn" class="lifeline-btn">👥 Ask the Audience</button>
+        </div>
+
+        <div id="questionBox" class="question-box">
+            Loading question...
+        </div>
+
+        <div id="timer" class="timer">Time left: 25 s</div>
+
+        <div class="answers">
+            <button class="answer-btn" data-index="0" id="answer0"></button>
+            <button class="answer-btn" data-index="1" id="answer1"></button>
+            <button class="answer-btn" data-index="2" id="answer2"></button>
+            <button class="answer-btn" data-index="3" id="answer3"></button>
+        </div>
+
+        <div id="status" class="status"></div>
+
+        <div class="controls">
+            <button id="restartBtn" class="restart-btn">Restart Game</button>
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <div class="money-ladder" id="ladder">
+            <!-- Filled by JS -->
+        </div>
+    </div>
+</div>
+
+<script>
+    // ==============================
+    //           QUESTIONS
+    // ==============================
+    const questions = [
+        {
+            question: "Which ancient civilization is associated with the first recorded dentist, Hesy-Ra, and what major dental pathology was highly prevalent in this society, likely due to their staple diet?",
+            answers: [
+                "The Hebrews; Defective occlusion.",
+                "The Phoenicians; Caries and periodontal disease.",
+                "Ancient Rome; Enamel hypoplasia.",
+                "Ancient Egypt; Dental wear, abscesses, and cysts."
+            ],
+            correct: 3 // D
+        },
+        {
+            question: "What unique dental practice, performed for aesthetic and ritualistic reasons on individuals of high social class, characterized the dental treatments of the Mayans?",
+            answers: [
+                "Attaching loose teeth with gold wire splints.",
+                "Filling carious cavities with linen cloth soaked in medicine.",
+                "Artistic mutilations of teeth and inlays of precious stones (jade, turquoise).",
+                "Cauterizing carious teeth with acid."
+            ],
+            correct: 2 // C
+        },
+        {
+            question: "In Ancient Rome, Galen and Celsus contributed to the field of oral health through general medical works. What was Galen's stance on medical specialization, and how did Celsus recommend treating a tooth before extraction?",
+            answers: [
+                "Galen supported specialization; Celsus recommended immediate extraction to prevent infection.",
+                "Galen was against specialization, stating 'health is one'; Celsus recommended trying other remedies first, such as hot poultices, and filling the cavity with linen thread or lead before extraction.",
+                "Galen proposed the four humors theory; Celsus advocated for prophylactic use of gold crowns.",
+                "Galen defined teeth as 'cutters, canines, and molars' based on form; Celsus recommended using pure wine rinses for black spots."
+            ],
+            correct: 1 // B
+        },
+        {
+            question: "During the Middle Ages in Western Europe, the practice of medicine underwent a technical shift (technification). What major event influenced a change in mentality and skepticism towards Galen and the Church, leading to increased interest in anatomy among artists?",
+            answers: [
+                "The Crusades.",
+                "The establishment of the first universities.",
+                "The adoption of the Hippocratic Oath.",
+                "The Black Death epidemic (1348-1350)."
+            ],
+            correct: 3 // D
+        },
+        {
+            question: "What distinction was made between the long-dressed and short-dressed surgeons in Medieval France, and which group was restricted to minor surgery?",
+            answers: [
+                "Long-dressed surgeons were university-trained physicians; short-dressed surgeons were itinerants.",
+                "Long-dressed surgeons worked in hospitals; short-dressed surgeons worked in private practice.",
+                "Long-dressed surgeons specialized in internal medicine; short-dressed surgeons specialized in external injuries.",
+                "Long-dressed surgeons were trained for all operations and authorized to teach; short-dressed surgeons (chirurgiens-barbiers) were dedicated to minor surgery."
+            ],
+            correct: 3 // D
+        },
+        {
+            question: "The Renaissance period saw anatomical advances that challenged Galen's teachings. Which anatomist discovered errors in Galen's work, claiming that Galen never dissected a freshly dead human body, and wrongly concluded that teeth continue to grow throughout life?",
+            answers: [
+                "Leonardo da Vinci.",
+                "Bartolomeo Eustachio.",
+                "Gabriel Falopio.",
+                "Andrés Vesalius."
+            ],
+            correct: 3 // D
+        },
+        {
+            question: "Which significant Renaissance anatomist authored the first book devoted exclusively to dental anatomy, morphology, histology, and physiology, titled 'Libellus de dentibus' (The Opuscule on Teeth), in 1563?",
+            answers: [
+                "Ambrosio Paré.",
+                "Matthew Realdo Colombo.",
+                "Bartolomeo Eustachio.",
+                "Hieronymus Brunschwig."
+            ],
+            correct: 2 // C
+        },
+        {
+            question: "What key invention did the surgeon Ambrosio Paré devise for patients with cleft palate, and what material did it use for fixation?",
+            answers: [
+                "Gold wire ligatures to stabilize jaw fractures.",
+                "A leather cup and strap to support fractured jaws.",
+                "The palatal obturator, a curved gold sheet fixed in place by an inserted sponge that absorbed secretions and swelled.",
+                "The pelican instrument for tooth extraction."
+            ],
+            correct: 2 // C
+        },
+        {
+            question: "What major technological advance in the 15th-17th centuries was 'of enormous importance for the development and dissemination of knowledge' in the Renaissance?",
+            answers: [
+                "The discovery of America.",
+                "The invention of the dental pelican.",
+                "The development of anatomical cuts by Da Vinci.",
+                "The invention of engraving and printing with movable type."
+            ],
+            correct: 3 // D
+        },
+        {
+            question: "What were the two main categories of dental cures prescribed by the Medieval surgeon Guy de Chauliac in his 'Inventorium Chirurgicalis Medicinae'?",
+            answers: [
+                "Empirical and Magical.",
+                "Surgical and Non-Surgical.",
+                "Universal (rules of hygiene, bleeding, cupping) and Particulars (rinsing carious teeth with decoctions and filling cavities).",
+                "Dietetics and Pharmacotherapy."
+            ],
+            correct: 2 // C
+        }
+    ];
+
+    // Money ladder in euros (10 levels)
+    const moneyLadder = [
+        "3 000 €",
+        "6 000 €",
+        "12 000 €",
+        "24 000 €",
+        "48 000 €",
+        "72 000 €",
+        "100 000 €",
+        "150 000 €",
+        "300 000 €",
+        "1 MILLION €"
+    ];
+
+    // Safe levels (indexes in moneyLadder)
+    const safeLevels = [3, 6, 9]; // after question 4, 7, 10
+
+    // ==============================
+    //          GAME STATE
+    // ==============================
+    let currentQuestionIndex = 0;
+    let gameOver = false;
+
+    let lifelinesUsed = {
+        fifty: false,
+        phone: false,
+        audience: false
+    };
+
+    let timerInterval = null;
+    let timeLeft = 25;
+
+    const questionBox = document.getElementById("questionBox");
+    const statusEl = document.getElementById("status");
+    const ladderEl = document.getElementById("ladder");
+    const timerEl = document.getElementById("timer");
+
+    const answerButtons = [
+        document.getElementById("answer0"),
+        document.getElementById("answer1"),
+        document.getElementById("answer2"),
+        document.getElementById("answer3")
+    ];
+
+    const fiftyBtn = document.getElementById("fiftyBtn");
+    const phoneBtn = document.getElementById("phoneBtn");
+    const audienceBtn = document.getElementById("audienceBtn");
+    const restartBtn = document.getElementById("restartBtn");
+
+    // ==============================
+    //         AUDIO (MUSIC + FX)
+    // ==============================
+    const bgMusic = new Audio("bg-music.mp3");
+    bgMusic.loop = true;
+    bgMusic.volume = 0.4;
+
+    const correctSound = new Audio("correct.mp3");
+    correctSound.volume = 0.9;
+
+    const wrongSound = new Audio("wrong.mp3");
+    wrongSound.volume = 0.9;
+
+    let audioStarted = false;
+
+    function ensureAudioStarted() {
+        if (!audioStarted) {
+            bgMusic.play().catch(() => {});
+            audioStarted = true;
+        }
+    }
+
+    // ==============================
+    //            TIMER
+    // ==============================
+    function startTimer() {
+        clearInterval(timerInterval);
+        timeLeft = 25;
+        timerEl.textContent = `Time left: ${timeLeft} s`;
+        timerEl.classList.remove("low");
+
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            timerEl.textContent = `Time left: ${timeLeft} s`;
+
+            if (timeLeft <= 10) {
+                timerEl.classList.add("low");
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                endGameByTimeout();
+            }
+        }, 1000);
+    }
+
+    function endGameByTimeout() {
+        if (gameOver) return;
+        gameOver = true;
+
+        const q = questions[currentQuestionIndex];
+        const correctIndex = q.correct;
+        answerButtons[correctIndex].classList.add("correct");
+
+        wrongSound.currentTime = 0;
+        wrongSound.play().catch(() => {});
+
+        statusEl.innerHTML =
+            `⏳ Time is up! You leave with <span class="highlight">${getSafeAmount()}</span>.`;
+        answerButtons.forEach(btn => btn.disabled = true);
+    }
+
+    // ==============================
+    //         INITIALIZATION
+    // ==============================
+    function initGame() {
+        clearInterval(timerInterval);
+        document.body.classList.remove("win");
+
+        currentQuestionIndex = 0;
+        gameOver = false;
+        lifelinesUsed = { fifty: false, phone: false, audience: false };
+
+        fiftyBtn.classList.remove("used");
+        phoneBtn.classList.remove("used");
+        audienceBtn.classList.remove("used");
+
+        statusEl.textContent = "";
+        answerButtons.forEach(btn => {
+            btn.classList.remove("disabled", "correct", "wrong");
+            btn.disabled = false;
+        });
+
+        renderLadder();
+        loadQuestion();
+    }
+
+    // Render the money ladder
+    function renderLadder() {
+        ladderEl.innerHTML = "";
+        for (let i = moneyLadder.length - 1; i >= 0; i--) {
+            const item = document.createElement("div");
+            item.className = "ladder-item";
+            if (i === currentQuestionIndex) {
+                item.classList.add("current");
+            } else if (i < currentQuestionIndex) {
+                item.classList.add("passed");
+            }
+            if (safeLevels.includes(i)) {
+                item.classList.add("safe");
+            }
+
+            const levelNumber = document.createElement("span");
+            levelNumber.textContent = (i + 1).toString().padStart(2, "0");
+
+            const amount = document.createElement("span");
+            amount.textContent = moneyLadder[i];
+
+            item.appendChild(levelNumber);
+            item.appendChild(amount);
+
+            ladderEl.appendChild(item);
+        }
+    }
+
+    // Trigger light transition for each new question
+    function triggerQuestionFlash() {
+        document.body.classList.remove("question-flash");
+        void document.body.offsetWidth; // force reflow
+        document.body.classList.add("question-flash");
+        setTimeout(() => {
+            document.body.classList.remove("question-flash");
+        }, 800);
+    }
+
+    // Load current question
+    function loadQuestion() {
+        const q = questions[currentQuestionIndex];
+        if (!q) {
+            winGame();
+            return;
+        }
+
+        questionBox.textContent = q.question;
+
+        answerButtons.forEach((btn, index) => {
+            btn.textContent = String.fromCharCode(65 + index) + " : " + q.answers[index];
+            btn.classList.remove("correct", "wrong", "disabled");
+            btn.disabled = false;
+        });
+
+        triggerQuestionFlash();
+        startTimer();
+        renderLadder();
+    }
+
+    // Handle answer click
+    function handleAnswerClick(index) {
+        if (gameOver) return;
+
+        ensureAudioStarted();
+        clearInterval(timerInterval);
+
+        const q = questions[currentQuestionIndex];
+        const correctIndex = q.correct;
+
+        answerButtons.forEach(btn => btn.disabled = true);
+
+        if (index === correctIndex) {
+            answerButtons[index].classList.add("correct");
+            const gain = moneyLadder[currentQuestionIndex];
+
+            correctSound.currentTime = 0;
+            correctSound.play().catch(() => {});
+
+            statusEl.innerHTML =
+                `✅ Correct! You just won <span class="highlight">${gain}</span>.`;
+
+            setTimeout(() => {
+                currentQuestionIndex++;
+                if (currentQuestionIndex >= questions.length) {
+                    winGame();
+                } else {
+                    statusEl.textContent = "";
+                    loadQuestion();
+                }
+            }, 1000);
+
+        } else {
+            answerButtons[index].classList.add("wrong");
+            answerButtons[correctIndex].classList.add("correct");
+
+            wrongSound.currentTime = 0;
+            wrongSound.play().catch(() => {});
+
+            endGameLost();
+        }
+    }
+
+    // Compute safe money level
+    function getSafeAmount() {
+        let safeIndex = -1;
+        for (let i = 0; i < safeLevels.length; i++) {
+            if (currentQuestionIndex >= safeLevels[i]) {
+                safeIndex = safeLevels[i];
+            }
+        }
+        if (safeIndex === -1) return "0 €";
+        return moneyLadder[safeIndex];
+    }
+
+    // Lose the game
+    function endGameLost() {
+        if (gameOver) return;
+        gameOver = true;
+        clearInterval(timerInterval);
+
+        const safeAmount = getSafeAmount();
+        statusEl.innerHTML =
+            `❌ Wrong answer. You leave with <span class="highlight">${safeAmount}</span>.`;
+        answerButtons.forEach(btn => btn.disabled = true);
+    }
+
+    // Win the game
+    function winGame() {
+        gameOver = true;
+        clearInterval(timerInterval);
+        document.body.classList.add("win");
+
+        const finalGain = moneyLadder[moneyLadder.length - 1];
+        statusEl.innerHTML =
+            `🏆 CONGRATULATIONS! You answered all questions correctly and won <span class="highlight">${finalGain}</span>!`;
+        questionBox.textContent = "Game over.";
+        answerButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.classList.add("disabled");
+        });
+    }
+
+    // ==============================
+    //           LIFELINES
+    // ==============================
+    function useFiftyFifty() {
+        if (lifelinesUsed.fifty || gameOver) return;
+        ensureAudioStarted();
+        lifelinesUsed.fifty = true;
+        fiftyBtn.classList.add("used");
+
+        const q = questions[currentQuestionIndex];
+        const correctIndex = q.correct;
+
+        const wrongIndices = [0, 1, 2, 3].filter(i => i !== correctIndex);
+
+        for (let i = wrongIndices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [wrongIndices[i], wrongIndices[j]] = [wrongIndices[j], wrongIndices[i]];
+        }
+
+        const toDisable = wrongIndices.slice(0, 2);
+        toDisable.forEach(i => {
+            answerButtons[i].classList.add("disabled");
+            answerButtons[i].disabled = true;
+        });
+
+        statusEl.textContent = "50:50 used: only two options remain.";
+    }
+
+    function usePhoneAFriend() {
+        if (lifelinesUsed.phone || gameOver) return;
+        ensureAudioStarted();
+        lifelinesUsed.phone = true;
+        phoneBtn.classList.add("used");
+
+        const q = questions[currentQuestionIndex];
+        const correctIndex = q.correct;
+
+        const isCorrect = Math.random() < 0.8;
+        let suggestedIndex;
+        if (isCorrect) {
+            suggestedIndex = correctIndex;
+        } else {
+            const others = [0, 1, 2, 3].filter(i => i !== correctIndex);
+            suggestedIndex = others[Math.floor(Math.random() * others.length)];
+        }
+
+        const letter = String.fromCharCode(65 + suggestedIndex);
+        statusEl.innerHTML =
+            `📞 Your friend thinks the correct answer is: <span class="highlight">${letter}</span>. (But they might be wrong!)`;
+    }
+
+    function useAudience() {
+        if (lifelinesUsed.audience || gameOver) return;
+        ensureAudioStarted();
+        lifelinesUsed.audience = true;
+        audienceBtn.classList.add("used");
+
+        const q = questions[currentQuestionIndex];
+        const correctIndex = q.correct;
+
+        let percentages = [0, 0, 0, 0];
+        let remaining = 100;
+
+        for (let i = 0; i < 4; i++) {
+            if (i === correctIndex) continue;
+            const val = Math.floor(Math.random() * 20);
+            percentages[i] = val;
+            remaining -= val;
+        }
+
+        percentages[correctIndex] = remaining;
+
+        let msg = "👥 Audience poll:<br>";
+        for (let i = 0; i < 4; i++) {
+            msg += `${String.fromCharCode(65 + i)}: ${percentages[i]}%<br>`;
+        }
+        statusEl.innerHTML = msg;
+    }
+
+    // ==============================
+    //        EVENT LISTENERS
+    // ==============================
+    answerButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const index = parseInt(btn.getAttribute("data-index"), 10);
+            handleAnswerClick(index);
+        });
+    });
+
+    fiftyBtn.addEventListener("click", useFiftyFifty);
+    phoneBtn.addEventListener("click", usePhoneAFriend);
+    audienceBtn.addEventListener("click", useAudience);
+    restartBtn.addEventListener("click", () => {
+        ensureAudioStarted();
+        initGame();
+    });
+
+    // Start game (without music, which starts on first click)
+    initGame();
+</script>
+</body>
+</html>
